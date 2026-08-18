@@ -12,6 +12,28 @@
     .gradient-background {
       background: linear-gradient(180deg, #ffd0e5 0%, #ffe8f2 36%, #ffffff 100%);
       min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+    }
+
+    .hero-image {
+      width: min(100%, 420px);
+      height: clamp(180px, 38dvh, 300px);
+    }
+
+    .question {
+      font-size: clamp(1.75rem, 7vw, 2.25rem);
+      line-height: 1.15;
+      text-wrap: balance;
+    }
+
+    #noButton.is-evasive {
+      position: fixed;
+      z-index: 50;
+      transition:
+        left 180ms ease-out,
+        top 180ms ease-out,
+        background-color 150ms ease;
     }
 
     .bounce {
@@ -40,18 +62,18 @@
   <link rel="preload" as="image" href="./images/image7.gif">
 </head>
 <body class="gradient-background">
-  <main class="flex items-center justify-center h-screen">
-    <section class="flex flex-col items-center p-4">
+  <main class="flex min-h-screen min-h-[100dvh] items-center justify-center px-4 py-6 sm:px-6">
+    <section class="flex w-full max-w-3xl flex-col items-center">
       <img
         id="imageDisplay"
         src="./images/image1.gif"
         alt="Cute kitten with flowers"
-        class="rounded-md h-[300px] object-cover"
+        class="hero-image rounded-md object-cover"
       />
-      <h1 id="viajeQuestion" class="text-4xl font-bold italic text-[#bd1e59] my-4">
+      <h1 id="viajeQuestion" class="question my-4 max-w-2xl text-center font-bold italic text-[#bd1e59]">
         Te Gustaria ir a Manizales conmigo?
       </h1>
-      <div id="responseButtons" class="flex gap-4 pt-5 items-center">
+      <div id="responseButtons" class="flex max-w-full flex-wrap items-center justify-center gap-3 pt-3 sm:gap-4 sm:pt-5">
         <button
           id="yesButton"
           class="bounce inline-flex items-center justify-center whitespace-nowrap rounded-md text-xl font-medium cursor-pointer px-4 py-2 bg-green-500 text-white transition-all duration-300 ease-in-out hover:bg-green-400 min-h-12 min-w-[75px]"
@@ -81,6 +103,9 @@
       const GROWTH_PER_CLICK = 35;
       const FONT_GROWTH_PER_CLICK = 25;
       const MAX_NO_CLICKS = 5;
+      const VIEWPORT_MARGIN = 16;
+      const POINTER_ESCAPE_DISTANCE = 110;
+      const MIN_POINTER_LANDING_DISTANCE = 180;
 
       const IMAGE_PATHS = [
         './images/image1.gif',
@@ -117,8 +142,76 @@
       let buttonWidth = 80;
       let fontSize = 20;
 
-      noButton.addEventListener('click', () => {
-        if (noClickCount >= MAX_NO_CLICKS) return;
+      const hasFinePointer = () =>
+        window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
+      const fitYesButtonToViewport = () => {
+        const availableWidth = Math.max(75, window.innerWidth - (VIEWPORT_MARGIN * 2));
+        const maxHeight = Math.max(48, window.innerHeight * 0.28);
+        const renderedHeight = Math.min(buttonHeight, maxHeight);
+        const maxFontSize = Math.max(
+          28,
+          Math.min(window.innerWidth * 0.14, renderedHeight * 0.55, 96)
+        );
+
+        yesButton.style.height = `${renderedHeight}px`;
+        yesButton.style.width = `${Math.min(buttonWidth, availableWidth)}px`;
+        yesButton.style.fontSize = `${Math.min(fontSize, maxFontSize)}px`;
+      };
+
+      const distanceBetween = (x1, y1, x2, y2) =>
+        Math.hypot(x2 - x1, y2 - y1);
+
+      const moveNoButton = (pointerX, pointerY) => {
+        noButton.classList.add('is-evasive');
+
+        const buttonRect = noButton.getBoundingClientRect();
+        const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - buttonRect.width - VIEWPORT_MARGIN);
+        const maxTop = Math.max(VIEWPORT_MARGIN, window.innerHeight - buttonRect.height - VIEWPORT_MARGIN);
+        let nextLeft = VIEWPORT_MARGIN;
+        let nextTop = VIEWPORT_MARGIN;
+
+        for (let attempt = 0; attempt < 12; attempt++) {
+          const candidateLeft =
+            VIEWPORT_MARGIN + Math.random() * Math.max(0, maxLeft - VIEWPORT_MARGIN);
+          const candidateTop =
+            VIEWPORT_MARGIN + Math.random() * Math.max(0, maxTop - VIEWPORT_MARGIN);
+          const candidateCenterX = candidateLeft + (buttonRect.width / 2);
+          const candidateCenterY = candidateTop + (buttonRect.height / 2);
+
+          nextLeft = candidateLeft;
+          nextTop = candidateTop;
+
+          if (
+            pointerX === undefined ||
+            distanceBetween(pointerX, pointerY, candidateCenterX, candidateCenterY) >=
+              MIN_POINTER_LANDING_DISTANCE
+          ) {
+            break;
+          }
+        }
+
+        noButton.style.left = `${nextLeft}px`;
+        noButton.style.top = `${nextTop}px`;
+      };
+
+      const keepNoButtonInViewport = () => {
+        if (!noButton.classList.contains('is-evasive')) return;
+
+        const buttonRect = noButton.getBoundingClientRect();
+        const maxLeft = Math.max(VIEWPORT_MARGIN, window.innerWidth - buttonRect.width - VIEWPORT_MARGIN);
+        const maxTop = Math.max(VIEWPORT_MARGIN, window.innerHeight - buttonRect.height - VIEWPORT_MARGIN);
+
+        noButton.style.left = `${Math.min(Math.max(buttonRect.left, VIEWPORT_MARGIN), maxLeft)}px`;
+        noButton.style.top = `${Math.min(Math.max(buttonRect.top, VIEWPORT_MARGIN), maxTop)}px`;
+      };
+
+      noButton.addEventListener('click', (event) => {
+        if (noClickCount >= MAX_NO_CLICKS) {
+          event.preventDefault();
+          moveNoButton(event.clientX, event.clientY);
+          return;
+        }
 
         noClickCount++;
 
@@ -131,12 +224,30 @@
         buttonWidth += GROWTH_PER_CLICK;
         fontSize += FONT_GROWTH_PER_CLICK;
 
-        yesButton.style.height = `${buttonHeight}px`;
-        yesButton.style.width = `${buttonWidth}px`;
-        yesButton.style.fontSize = `${fontSize}px`;
+        fitYesButtonToViewport();
 
         // Update "No" button text with increasingly desperate messages
         noButton.textContent = NO_BUTTON_MESSAGES[noClickCount];
+      });
+
+      document.addEventListener('pointermove', (event) => {
+        if (noClickCount < MAX_NO_CLICKS || !hasFinePointer()) return;
+
+        const buttonRect = noButton.getBoundingClientRect();
+        const nearestX = Math.max(buttonRect.left, Math.min(event.clientX, buttonRect.right));
+        const nearestY = Math.max(buttonRect.top, Math.min(event.clientY, buttonRect.bottom));
+
+        if (
+          distanceBetween(event.clientX, event.clientY, nearestX, nearestY) <
+          POINTER_ESCAPE_DISTANCE
+        ) {
+          moveNoButton(event.clientX, event.clientY);
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        fitYesButtonToViewport();
+        keepNoButtonInViewport();
       });
 
       yesButton.addEventListener('click', () => {
